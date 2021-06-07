@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/olivere/elastic/v7"
-	"log"
-	"strconv"
 )
 const INDEXNAME = "books_yuval"
-// Book struct for deserialization of documents from json
+const PORT = 9200
+const DOMAINURL = "http://es-search-7.fiverrdev.com"
 type Book struct {
 	Title          string  `json:"title"`
 	AuthorName     string  `json:"author_name"`
@@ -17,88 +16,81 @@ type Book struct {
 	PublishDate    string  `json:"publish_date"`
 }
 
-func ElasticInitClient() *elastic.Client {
-	// Pass connection port
-	port := 9200
-	strPort := strconv.Itoa(port)
-	// Pass domain string
-	domainURL := "http://es-search-7.fiverrdev.com"
-	// Complete URL
-	setURL := domainURL + ":" + strPort
-	// Instantiate a client (elastic library instance)
+type Elastic struct{
+	Client *elastic.Client
+}
+
+func (e *Elastic) DBInitClient() error {
+	setURL := fmt.Sprint(DOMAINURL,":",PORT)
 	client, err := elastic.NewClient(elastic.SetURL(setURL))
 	if err != nil {
-		fmt.Println("elastic.NewClient() ERROR:", err)
-		log.Fatalf("quitting connection..")
+		return err
 	}
-	return client
+	e.Client = client
+	return nil
 }
 
-func ElasticGetBookByID(client *elastic.Client, id string) *elastic.GetResult{
+func (e *Elastic) DBGetBookByID(id string) (*elastic.GetResult,error){
 	ctx := context.Background()
-	get1, err := client.Get().Index(INDEXNAME).Id(id).Do(ctx)
+	book, err := (e.Client).Get().Index(INDEXNAME).Id(id).Do(ctx)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return get1
+	return book, nil
 }
 
-func ElasticGetStoreData(client *elastic.Client) (int64, *elastic.SearchResult){
+func (e *Elastic) DBGetStoreData() (int64, *elastic.SearchResult,error){
 	ctx := context.Background()
 	//get document count in index
-	countService := elastic.NewCountService(client)
+	countService := elastic.NewCountService(e.Client)
 	countResult, err := countService.Index(INDEXNAME).Do(ctx)
 	if err != nil {
-		panic(err)
+		return 0, nil, err
 	}
-
 	//get number of distinct authors
 	agg := elastic.NewCardinalityAggregation().Field("author_name.keyword")
-	diffAuthors, err := client.Search().Index(INDEXNAME).Aggregation("diff_authors", agg).Do(ctx)
+	diffAuthors, err := (e.Client.Search()).Index(INDEXNAME).Aggregation("diff_authors", agg).Do(ctx)
 	if err !=nil{
-		panic(err)
+		return 0,nil,err
 	}
-	return countResult,diffAuthors
+	return countResult,diffAuthors,nil
 
 }
 
-func ElasticPutBook(client *elastic.Client, book *Book) *elastic.IndexResponse{
+func (e *Elastic) DBPutBook(book *Book) (*elastic.IndexResponse,error){
 	ctx := context.Background()
 	// Index a tweet (using JSON serialization)
-	put1, err := client.Index().Index(INDEXNAME).BodyJson(*book).Do(ctx)
-	if err != nil {
-		// Handle error
-		panic(err)
+	putStatus, err := (e.Client).Index().Index(INDEXNAME).BodyJson(*book).Do(ctx)
+	if err!=nil{
+		return nil, err
 	}
-	return put1
+	return putStatus,nil
 }
 
-func ElasticUpdateBook(client *elastic.Client, title string, id string) *elastic.UpdateResponse{
+func (e *Elastic) DBUpdateBook(title string, id string) (*elastic.UpdateResponse,error){
 	ctx := context.Background()
-	response, err := client.Update().Index(INDEXNAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
-	if err != nil {
-		// Handle error
-		panic(err)
+	response, err := (e.Client).Update().Index(INDEXNAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
+	if err !=nil{
+		return nil, err
 	}
-	return response
+	return response,nil
 }
 
-func ElasticDeleteBook(client *elastic.Client, id string) *elastic.DeleteResponse{
+func (e *Elastic) DBDeleteBook(id string) (*elastic.DeleteResponse,error){
 	ctx := context.Background()
-	response, err := client.Delete().Index("books_yuval").Id(id).Do(ctx)
-	if err != nil {
-		// Handle error
-		panic(err)
+	response, err := (e.Client).Delete().Index("books_yuval").Id(id).Do(ctx)
+	if err != nil{
+		return nil, err
 	}
-	return response
+	return response,nil
 }
 
-func ElasticSearchBook(client *elastic.Client, title string, author_name string, price_range [2]float64, opcode int) *elastic.SearchResult{
+func (e *Elastic) DBSearchBook(title string, authorName string, priceRange [2]float64, opcode int) (*elastic.SearchResult,error){
 	ctx := context.Background()
 	query := elastic.NewBoolQuery()
 	matchQuery1 := elastic.NewMatchQuery("title", title)
-	matchQuery2 := elastic.NewMatchQuery("author_name", author_name)
-	rangeQuery := elastic.NewRangeQuery("price").From(price_range[0]).To(price_range[1])
+	matchQuery2 := elastic.NewMatchQuery("author_name", authorName)
+	rangeQuery := elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1])
 	var searchQuery *elastic.BoolQuery
 	switch opcode{//opcode specifies which arguments were given to query
 		case 0://no search arguments
@@ -118,10 +110,10 @@ func ElasticSearchBook(client *elastic.Client, title string, author_name string,
 		case 7://title author and price
 			searchQuery = query.Must(matchQuery1, matchQuery2, rangeQuery)
 	}
-	searchResult, err := client.Search().Index(INDEXNAME).Query(searchQuery).Size(100).Do(ctx)
-	if err != nil {
-		panic(err)
+	searchResult, err := (e.Client).Search().Index(INDEXNAME).Query(searchQuery).Size(100).Do(ctx)
+	if err != nil{
+		return nil, err
 	}
-		return searchResult
+	return searchResult,nil
 }
 
