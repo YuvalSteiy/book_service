@@ -1,9 +1,10 @@
 package main
 
 import (
+	"github.com/YuvalSteiy/book_service/service"
 	"github.com/gin-gonic/gin"
-	"test/service"
 )
+
 func main() {
 	router := gin.Default()
 	service.ConfigRoutes(router)

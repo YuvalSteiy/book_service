@@ -2,26 +2,22 @@ package dal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/YuvalSteiy/book_service/models"
 	"github.com/olivere/elastic/v7"
 )
-const INDEXNAME = "books_yuval"
-const PORT = 9200
-const DOMAINURL = "http://es-search-7.fiverrdev.com"
-type Book struct {
-	Title          string  `json:"title"`
-	AuthorName     string  `json:"author_name"`
-	EbookAvailable bool    `json:"ebook_available"`
-	Price          float64 `json:"price"`
-	PublishDate    string  `json:"publish_date"`
-}
 
-type Elastic struct{
+const INDEX_NAME = "books_yuval"
+const PORT = 9200
+const DOMAIN_URL = "http://es-search-7.fiverrdev.com"
+
+type Elastic struct {
 	Client *elastic.Client
 }
 
-func (e *Elastic) DBInitClient() error {
-	setURL := fmt.Sprint(DOMAINURL,":",PORT)
+func (e *Elastic) InitClient() error {
+	setURL := fmt.Sprint(DOMAIN_URL, ":", PORT)
 	client, err := elastic.NewClient(elastic.SetURL(setURL))
 	if err != nil {
 		return err
@@ -30,90 +26,85 @@ func (e *Elastic) DBInitClient() error {
 	return nil
 }
 
-func (e *Elastic) DBGetBookByID(id string) (*elastic.GetResult,error){
+func (e *Elastic) GetBookByID(id string) (*models.Book, error) {
 	ctx := context.Background()
-	book, err := (e.Client).Get().Index(INDEXNAME).Id(id).Do(ctx)
+	book, err := (e.Client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return book, nil
+	var parsedBook models.Book
+	json.Unmarshal(book.Source, &parsedBook)
+	return &parsedBook, nil
 }
 
-func (e *Elastic) DBGetStoreData() (int64, *elastic.SearchResult,error){
+func (e *Elastic) InsertBook(book *models.Book) (string, error) {
 	ctx := context.Background()
-	//get document count in index
+	putStatus, err := (e.Client).Index().Index(INDEX_NAME).BodyJson(*book).Do(ctx)
+	if err != nil {
+		return "", err
+	}
+	return putStatus.Id, nil
+}
+func (e *Elastic) UpdateBook(title string, id string) error {
+	ctx := context.Background()
+	_, err := (e.Client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (e *Elastic) DeleteBook(id string) error {
+	ctx := context.Background()
+	_, err := (e.Client).Delete().Index("books_yuval").Id(id).Do(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Elastic) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
+	ctx := context.Background()
+	query := elastic.NewBoolQuery()
+	if FieldExist(title) {
+		matchQuery1 := elastic.NewMatchQuery("title", title)
+		query.Filter(matchQuery1)
+	}
+	if FieldExist(authorName) {
+		matchQuery2 := elastic.NewMatchQuery("author_name", authorName)
+		query.Filter(matchQuery2)
+	}
+	if FieldExist(priceRangeStr) {
+		priceRange := GetPriceRange(priceRangeStr)
+		if priceRange != nil {
+			rangeQuery := elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1])
+			query.Filter(rangeQuery)
+		}
+	}
+	searchResult, err := (e.Client).Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+	numHits := searchResult.Hits.TotalHits.Value
+	resultsArr := make([]models.Book, numHits)
+	for i, hit := range searchResult.Hits.Hits {
+		json.Unmarshal(hit.Source, &resultsArr[i])
+	}
+	return resultsArr, nil
+}
+
+func (e *Elastic) GetStoreInfo() (int64, *float64, error) {
+	ctx := context.Background()
 	countService := elastic.NewCountService(e.Client)
-	countResult, err := countService.Index(INDEXNAME).Do(ctx)
+	countResult, err := countService.Index(INDEX_NAME).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	//get number of distinct authors
 	agg := elastic.NewCardinalityAggregation().Field("author_name.keyword")
-	diffAuthors, err := (e.Client.Search()).Index(INDEXNAME).Aggregation("diff_authors", agg).Do(ctx)
-	if err !=nil{
-		return 0,nil,err
+	diffAuthors, err := (e.Client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
+	if err != nil {
+		return 0, nil, err
 	}
-	return countResult,diffAuthors,nil
-
-}
-
-func (e *Elastic) DBPutBook(book *Book) (*elastic.IndexResponse,error){
-	ctx := context.Background()
-	// Index a tweet (using JSON serialization)
-	putStatus, err := (e.Client).Index().Index(INDEXNAME).BodyJson(*book).Do(ctx)
-	if err!=nil{
-		return nil, err
-	}
-	return putStatus,nil
-}
-
-func (e *Elastic) DBUpdateBook(title string, id string) (*elastic.UpdateResponse,error){
-	ctx := context.Background()
-	response, err := (e.Client).Update().Index(INDEXNAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
-	if err !=nil{
-		return nil, err
-	}
-	return response,nil
-}
-
-func (e *Elastic) DBDeleteBook(id string) (*elastic.DeleteResponse,error){
-	ctx := context.Background()
-	response, err := (e.Client).Delete().Index("books_yuval").Id(id).Do(ctx)
-	if err != nil{
-		return nil, err
-	}
-	return response,nil
-}
-
-func (e *Elastic) DBSearchBook(title string, authorName string, priceRange [2]float64, opcode int) (*elastic.SearchResult,error){
-	ctx := context.Background()
-	query := elastic.NewBoolQuery()
-	matchQuery1 := elastic.NewMatchQuery("title", title)
-	matchQuery2 := elastic.NewMatchQuery("author_name", authorName)
-	rangeQuery := elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1])
-	var searchQuery *elastic.BoolQuery
-	switch opcode{//opcode specifies which arguments were given to query
-		case 0://no search arguments
-			searchQuery =query.Must()
-		case 1://only price range specified
-			searchQuery = query.Must(rangeQuery)
-		case 2://only title
-			searchQuery = query.Must(matchQuery1)
-		case 3://price and title
-			searchQuery = query.Must(matchQuery1, rangeQuery)
-		case 4://only author
-			searchQuery = query.Must(matchQuery2)
-		case 5://price and author
-			searchQuery = query.Must(matchQuery2, rangeQuery)
-		case 6://title and author
-			searchQuery = query.Must(matchQuery1, matchQuery2)
-		case 7://title author and price
-			searchQuery = query.Must(matchQuery1, matchQuery2, rangeQuery)
-	}
-	searchResult, err := (e.Client).Search().Index(INDEXNAME).Query(searchQuery).Size(100).Do(ctx)
-	if err != nil{
-		return nil, err
-	}
-	return searchResult,nil
+	numDiffAuthors, _ := diffAuthors.Aggregations.Cardinality("diff_authors")
+	return countResult, numDiffAuthors.Value, nil
 }
 
