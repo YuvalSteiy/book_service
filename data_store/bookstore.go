@@ -5,9 +5,6 @@ import (
 	"sync"
 )
 
-var bookStorer BookStorer
-var bookStorerOnce sync.Once
-
 type BookStorer interface {
 	GetBookByID(id string) (*models.Book, error)
 	InsertBook(book models.Book) (string, error)
@@ -17,9 +14,12 @@ type BookStorer interface {
 	GetStoreInfo() (int64, *float64, error)
 }
 
+var bookStorer BookStorer
+var bookStorerOnce sync.Once
+
 func NewBookStorer() BookStorer {
 	bookStorerOnce.Do(func() {
-		bookStorer = CreateElastic()
+		bookStorer = newElasticClient()
 	})
 
 	return bookStorer

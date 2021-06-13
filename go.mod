@@ -14,6 +14,7 @@ require (
 	github.com/olivere/elastic/v7 v7.0.24
 	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/onsi/gomega v1.13.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/ugorji/go v1.2.6 // indirect
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 	golang.org/x/sys v0.0.0-20210531080801-fdfd190a6549 // indirect

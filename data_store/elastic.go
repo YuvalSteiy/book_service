@@ -14,32 +14,36 @@ const (
 	DOMAIN_URL = "http://es-search-7.fiverrdev.com"
 )
 
-type Elastic struct {
-	Client *elastic.Client
+type elasticClient struct {
+	client *elastic.Client
 }
 
-func initElasticClient() *elastic.Client {
+func initElasticClient() (*elastic.Client,error) {
 	setURL := fmt.Sprintf("%s:%d", DOMAIN_URL, PORT)
 	client, err := elastic.NewClient(elastic.SetURL(setURL))
 	if err != nil {
+		return nil,err
+	}
+
+	return client,nil
+}
+
+func newElasticClient() *elasticClient {
+	client,err :=  initElasticClient()
+	if err != nil{
 		return nil
 	}
 
-	return client
-}
-
-func CreateElastic() *Elastic {
-	e := Elastic{Client: initElasticClient()}
-	if e.Client == nil {
+	if client == nil {
 		return nil
 	}
 
-	return &e
+	return &elasticClient{ client: client}
 }
 
-func (e *Elastic) GetBookByID(id string) (*models.Book, error) {
+func (e *elasticClient) GetBookByID(id string) (*models.Book, error) {
 	ctx := context.Background()
-	response, err := (e.Client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
+	response, err := (e.client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,9 +57,9 @@ func (e *Elastic) GetBookByID(id string) (*models.Book, error) {
 	return &book, nil
 }
 
-func (e *Elastic) InsertBook(book models.Book) (string, error) {
+func (e *elasticClient) InsertBook(book models.Book) (string, error) {
 	ctx := context.Background()
-	response, err := (e.Client).Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
+	response, err := (e.client).Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -63,9 +67,9 @@ func (e *Elastic) InsertBook(book models.Book) (string, error) {
 	return response.Id, nil
 }
 
-func (e *Elastic) UpdateBook(title string, id string) error {
+func (e *elasticClient) UpdateBook(title string, id string) error {
 	ctx := context.Background()
-	_, err := (e.Client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
+	_, err := (e.client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
 	if err != nil {
 		return err
 	}
@@ -73,9 +77,9 @@ func (e *Elastic) UpdateBook(title string, id string) error {
 	return nil
 }
 
-func (e *Elastic) DeleteBook(id string) error {
+func (e *elasticClient) DeleteBook(id string) error {
 	ctx := context.Background()
-	_, err := (e.Client).Delete().Index(INDEX_NAME).Id(id).Do(ctx)
+	_, err := (e.client).Delete().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return err
 	}
@@ -83,7 +87,7 @@ func (e *Elastic) DeleteBook(id string) error {
 	return nil
 }
 
-func (e *Elastic) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
+func (e *elasticClient) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
 	ctx := context.Background()
 	query := elastic.NewBoolQuery()
 	if title != "" {
@@ -97,12 +101,9 @@ func (e *Elastic) SearchBook(title string, authorName string, priceRangeStr stri
 		if err != nil {
 			return nil, err
 		}
-		if priceRange == nil {
-			return nil, nil
-		}
 		query.Filter(elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1]))
 	}
-	searchResult, err := (e.Client).Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
+	searchResult, err := (e.client).Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -119,16 +120,16 @@ func (e *Elastic) SearchBook(title string, authorName string, priceRangeStr stri
 	return resultsArr, nil
 }
 
-func (e *Elastic) GetStoreInfo() (int64, *float64, error) {
+func (e *elasticClient) GetStoreInfo() (int64, *float64, error) {
 	ctx := context.Background()
-	countService := elastic.NewCountService(e.Client)
+	countService := elastic.NewCountService(e.client)
 	countResult, err := countService.Index(INDEX_NAME).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	agg := elastic.NewCardinalityAggregation().Field("author_name.keyword")
-	response, err := (e.Client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
+	response, err := (e.client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}

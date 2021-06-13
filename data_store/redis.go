@@ -2,63 +2,87 @@ package data_store
 
 import (
 	"github.com/go-redis/redis"
+	"github.com/pkg/errors"
 )
 
 const ADDR = "localhost:6379"
 
-type Redis struct {
-	Client *redis.Client
+type redisClient struct {
+	client *redis.Client
 }
 
 func initRedisClient() *redis.Client {
 	return redis.NewClient(&redis.Options{Addr: ADDR})
 }
 
-func CreateRedis() *Redis {
-	r := Redis{Client: initRedisClient()}
-	if r.Client == nil {
+func NewRedisClient() *redisClient {
+	client := initRedisClient()
+	if client == nil {
 		return nil
 	}
 
-	return &r
+	return &redisClient{client: client}
 }
 
-func (r *Redis) AddActivity(username string, req string) {
-	checkExist := r.Client.HExists(username, "path1").Val()
+func (r *redisClient) AddActivity(username string, req string) error {
+	checkExist := r.client.HExists(username, "path1").Val()
 	if !checkExist {
-		r.createNewClientActivity(username, req)
+		err := r.createNewClientActivity(username, req)
+		if err != nil {
+			return err
+		}
 	} else {
-		r.updateClientActivity(username, req)
+		err := r.updateClientActivity(username, req)
+		if err != nil {
+			return err
+		}
 	}
-
+	return nil
 }
 
-func (r *Redis) createNewClientActivity(username string, req string) {
+func (r *redisClient) createNewClientActivity(username string, req string) error {
 	m := map[string]interface{}{
 		"path1": req,
 		"path2": "",
 		"path3": "",
 	}
 
-	r.Client.HMSet(username, m)
+	_, err := r.client.HMSet(username, m).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (r *Redis) updateClientActivity(username string, req string) {
-	currRecord := r.Client.HMGet(username, "path1", "path2", "path3").Val()
+func (r *redisClient) updateClientActivity(username string, req string) error {
+	currRecord, err := r.client.HMGet(username, "path1", "path2", "path3").Result()
+	if err != nil {
+		return err
+	}
+
 	m := map[string]interface{}{
 		"path1": req,
 		"path2": currRecord[0],
 		"path3": currRecord[1],
 	}
 
-	r.Client.HMSet(username, m)
+	r.client.HMSet(username, m)
+	return nil
 }
 
-func (r *Redis) GetUserActivity(username string) []interface{} {
-	if !r.Client.HExists(username, "path1").Val() {
-		return nil
+func (r *redisClient) GetUserActivity(username string) ([]interface{}, error) {
+	exist, err := r.client.HExists(username, "path1").Result()
+	if err != nil {
+		return nil, err
+	}
+	if !exist {
+		return nil, errors.New("No Activity For This User")
 	}
 
-	userData := r.Client.HMGet(username, "path1", "path2", "path3").Val()
-	return userData
+	userData, err := r.client.HMGet(username, "path1", "path2", "path3").Result()
+	if err != nil{
+		return nil, err
+	}
+
+	return userData, nil
 }
