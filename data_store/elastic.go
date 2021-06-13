@@ -1,4 +1,4 @@
-package dal
+package data_store
 
 import (
 	"context"
@@ -8,87 +8,114 @@ import (
 	"github.com/olivere/elastic/v7"
 )
 
-const INDEX_NAME = "books_yuval"
-const PORT = 9200
-const DOMAIN_URL = "http://es-search-7.fiverrdev.com"
+const (
+	INDEX_NAME = "books_yuval"
+	PORT       = 9200
+	DOMAIN_URL = "http://es-search-7.fiverrdev.com"
+)
 
 type Elastic struct {
 	Client *elastic.Client
 }
 
-func (e *Elastic) InitClient() error {
-	setURL := fmt.Sprint(DOMAIN_URL, ":", PORT)
+func initElasticClient() *elastic.Client {
+	setURL := fmt.Sprintf("%s:%d", DOMAIN_URL, PORT)
 	client, err := elastic.NewClient(elastic.SetURL(setURL))
 	if err != nil {
-		return err
+		return nil
 	}
-	e.Client = client
-	return nil
+
+	return client
+}
+
+func CreateElastic() *Elastic {
+	e := Elastic{Client: initElasticClient()}
+	if e.Client == nil {
+		return nil
+	}
+
+	return &e
 }
 
 func (e *Elastic) GetBookByID(id string) (*models.Book, error) {
 	ctx := context.Background()
-	book, err := (e.Client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
+	response, err := (e.Client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var parsedBook models.Book
-	json.Unmarshal(book.Source, &parsedBook)
-	return &parsedBook, nil
+
+	var book models.Book
+	err = json.Unmarshal(response.Source, &book)
+	if err != nil {
+		return nil, err
+	}
+
+	return &book, nil
 }
 
-func (e *Elastic) InsertBook(book *models.Book) (string, error) {
+func (e *Elastic) InsertBook(book models.Book) (string, error) {
 	ctx := context.Background()
-	putStatus, err := (e.Client).Index().Index(INDEX_NAME).BodyJson(*book).Do(ctx)
+	response, err := (e.Client).Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
 	if err != nil {
 		return "", err
 	}
-	return putStatus.Id, nil
+
+	return response.Id, nil
 }
+
 func (e *Elastic) UpdateBook(title string, id string) error {
 	ctx := context.Background()
 	_, err := (e.Client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
+
 func (e *Elastic) DeleteBook(id string) error {
 	ctx := context.Background()
-	_, err := (e.Client).Delete().Index("books_yuval").Id(id).Do(ctx)
+	_, err := (e.Client).Delete().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (e *Elastic) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
 	ctx := context.Background()
 	query := elastic.NewBoolQuery()
-	if FieldExist(title) {
-		matchQuery1 := elastic.NewMatchQuery("title", title)
-		query.Filter(matchQuery1)
+	if title != "" {
+		query.Filter(elastic.NewMatchQuery("title", title))
 	}
-	if FieldExist(authorName) {
-		matchQuery2 := elastic.NewMatchQuery("author_name", authorName)
-		query.Filter(matchQuery2)
+	if authorName != "" {
+		query.Filter(elastic.NewMatchQuery("author_name", authorName))
 	}
-	if FieldExist(priceRangeStr) {
-		priceRange := GetPriceRange(priceRangeStr)
-		if priceRange != nil {
-			rangeQuery := elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1])
-			query.Filter(rangeQuery)
+	if priceRangeStr != "" {
+		priceRange, err := GetPriceRange(priceRangeStr)
+		if err != nil {
+			return nil, err
 		}
+		if priceRange == nil {
+			return nil, nil
+		}
+		query.Filter(elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1]))
 	}
 	searchResult, err := (e.Client).Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	numHits := searchResult.Hits.TotalHits.Value
 	resultsArr := make([]models.Book, numHits)
 	for i, hit := range searchResult.Hits.Hits {
-		json.Unmarshal(hit.Source, &resultsArr[i])
+		err = json.Unmarshal(hit.Source, &resultsArr[i])
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return resultsArr, nil
 }
 
@@ -99,12 +126,17 @@ func (e *Elastic) GetStoreInfo() (int64, *float64, error) {
 	if err != nil {
 		return 0, nil, err
 	}
+
 	agg := elastic.NewCardinalityAggregation().Field("author_name.keyword")
-	diffAuthors, err := (e.Client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
+	response, err := (e.Client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	numDiffAuthors, _ := diffAuthors.Aggregations.Cardinality("diff_authors")
+
+	numDiffAuthors, found := response.Aggregations.Cardinality("diff_authors")
+	if found == false {
+		return 0, nil, nil
+	}
+
 	return countResult, numDiffAuthors.Value, nil
 }
-
