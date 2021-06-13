@@ -5,8 +5,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const SERVER_PORT = ":3005"
+
 func main() {
-	router := gin.Default()
-	service.ConfigRoutes(router)
-	router.Run(":3005")
+	server := gin.Default()
+	service.ConfigRoutes(server)
+	server.Run(SERVER_PORT)
 }
