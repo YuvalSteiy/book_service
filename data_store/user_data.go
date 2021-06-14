@@ -12,7 +12,7 @@ var userDaterOnce sync.Once
 
 func NewUserDater() UserDater {
 	userDaterOnce.Do(func() {
-		userDater = NewRedisClient()
+		userDater = newRedisUserData()
 	})
 
 	return userDater

@@ -14,34 +14,30 @@ const (
 	DOMAIN_URL = "http://es-search-7.fiverrdev.com"
 )
 
-type elasticClient struct {
+type elasticBookStore struct {
 	client *elastic.Client
 }
 
-func initElasticClient() (*elastic.Client,error) {
+func initElasticBookStore() (*elastic.Client, error) {
 	setURL := fmt.Sprintf("%s:%d", DOMAIN_URL, PORT)
 	client, err := elastic.NewClient(elastic.SetURL(setURL))
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
-	return client,nil
+	return client, nil
 }
 
-func newElasticClient() *elasticClient {
-	client,err :=  initElasticClient()
-	if err != nil{
+func newElasticBookStore() *elasticBookStore {
+	client, err := initElasticBookStore()
+	if err != nil {
 		return nil
 	}
 
-	if client == nil {
-		return nil
-	}
-
-	return &elasticClient{ client: client}
+	return &elasticBookStore{client: client}
 }
 
-func (e *elasticClient) GetBookByID(id string) (*models.Book, error) {
+func (e *elasticBookStore) GetBookByID(id string) (*models.Book, error) {
 	ctx := context.Background()
 	response, err := (e.client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
@@ -57,7 +53,7 @@ func (e *elasticClient) GetBookByID(id string) (*models.Book, error) {
 	return &book, nil
 }
 
-func (e *elasticClient) InsertBook(book models.Book) (string, error) {
+func (e *elasticBookStore) InsertBook(book models.Book) (string, error) {
 	ctx := context.Background()
 	response, err := (e.client).Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
 	if err != nil {
@@ -67,7 +63,7 @@ func (e *elasticClient) InsertBook(book models.Book) (string, error) {
 	return response.Id, nil
 }
 
-func (e *elasticClient) UpdateBook(title string, id string) error {
+func (e *elasticBookStore) UpdateBook(title string, id string) error {
 	ctx := context.Background()
 	_, err := (e.client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
 	if err != nil {
@@ -77,7 +73,7 @@ func (e *elasticClient) UpdateBook(title string, id string) error {
 	return nil
 }
 
-func (e *elasticClient) DeleteBook(id string) error {
+func (e *elasticBookStore) DeleteBook(id string) error {
 	ctx := context.Background()
 	_, err := (e.client).Delete().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
@@ -87,7 +83,7 @@ func (e *elasticClient) DeleteBook(id string) error {
 	return nil
 }
 
-func (e *elasticClient) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
+func (e *elasticBookStore) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
 	ctx := context.Background()
 	query := elastic.NewBoolQuery()
 	if title != "" {
@@ -120,7 +116,7 @@ func (e *elasticClient) SearchBook(title string, authorName string, priceRangeSt
 	return resultsArr, nil
 }
 
-func (e *elasticClient) GetStoreInfo() (int64, *float64, error) {
+func (e *elasticBookStore) GetStoreInfo() (int64, *float64, error) {
 	ctx := context.Background()
 	countService := elastic.NewCountService(e.client)
 	countResult, err := countService.Index(INDEX_NAME).Do(ctx)

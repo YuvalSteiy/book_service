@@ -19,7 +19,7 @@ var bookStorerOnce sync.Once
 
 func NewBookStorer() BookStorer {
 	bookStorerOnce.Do(func() {
-		bookStorer = newElasticClient()
+		bookStorer = newElasticBookStore()
 	})
 
 	return bookStorer

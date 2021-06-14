@@ -7,7 +7,7 @@ import (
 
 const ADDR = "localhost:6379"
 
-type redisClient struct {
+type redisUserData struct {
 	client *redis.Client
 }
 
@@ -15,24 +15,25 @@ func initRedisClient() *redis.Client {
 	return redis.NewClient(&redis.Options{Addr: ADDR})
 }
 
-func NewRedisClient() *redisClient {
+func newRedisUserData() *redisUserData {
 	client := initRedisClient()
 	if client == nil {
 		return nil
 	}
 
-	return &redisClient{client: client}
+	return &redisUserData{client: client}
 }
 
-func (r *redisClient) AddActivity(username string, req string) error {
+func (r *redisUserData) AddActivity(username string, req string) error {
 	checkExist := r.client.HExists(username, "path1").Val()
+	var err error
 	if !checkExist {
-		err := r.createNewClientActivity(username, req)
+		err = r.createNewClientActivity(username, req)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := r.updateClientActivity(username, req)
+		err = r.updateClientActivity(username, req)
 		if err != nil {
 			return err
 		}
@@ -40,7 +41,7 @@ func (r *redisClient) AddActivity(username string, req string) error {
 	return nil
 }
 
-func (r *redisClient) createNewClientActivity(username string, req string) error {
+func (r *redisUserData) createNewClientActivity(username string, req string) error {
 	m := map[string]interface{}{
 		"path1": req,
 		"path2": "",
@@ -48,13 +49,10 @@ func (r *redisClient) createNewClientActivity(username string, req string) error
 	}
 
 	_, err := r.client.HMSet(username, m).Result()
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-func (r *redisClient) updateClientActivity(username string, req string) error {
+func (r *redisUserData) updateClientActivity(username string, req string) error {
 	currRecord, err := r.client.HMGet(username, "path1", "path2", "path3").Result()
 	if err != nil {
 		return err
@@ -66,11 +64,11 @@ func (r *redisClient) updateClientActivity(username string, req string) error {
 		"path3": currRecord[1],
 	}
 
-	r.client.HMSet(username, m)
-	return nil
+	_, err = r.client.HMSet(username, m).Result()
+	return err
 }
 
-func (r *redisClient) GetUserActivity(username string) ([]interface{}, error) {
+func (r *redisUserData) GetUserActivity(username string) ([]interface{}, error) {
 	exist, err := r.client.HExists(username, "path1").Result()
 	if err != nil {
 		return nil, err
@@ -80,7 +78,7 @@ func (r *redisClient) GetUserActivity(username string) ([]interface{}, error) {
 	}
 
 	userData, err := r.client.HMGet(username, "path1", "path2", "path3").Result()
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
