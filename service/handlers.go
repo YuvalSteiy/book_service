@@ -21,10 +21,6 @@ func GetBookByID(c *gin.Context) {
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	id := c.Param("id")
 	book, err := db.GetBookByID(id)
@@ -41,13 +37,10 @@ func InsertBook(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	var book models.Book
 	err = c.ShouldBind(&book)
@@ -70,13 +63,10 @@ func UpdateBook(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	id := c.Param("id")
 	var book models.Book
@@ -100,13 +90,10 @@ func DeleteBook(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	id := c.Param("id")
 	err = db.DeleteBook(id)
@@ -123,13 +110,10 @@ func SearchBook(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	title := c.DefaultQuery("title", "")
 	authorName := c.DefaultQuery("author_name", "")
@@ -148,13 +132,10 @@ func GetStoreInfo(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_BOOKSTORE_FAIL})
-		return
-	}
 
 	count, diffAuthors, err := db.GetStoreInfo()
 	if diffAuthors == nil {
@@ -178,9 +159,6 @@ func GetUserData(c *gin.Context) {
 	}
 
 	r := data_store.NewUserDater()
-	if r == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_USERDATA_FAIL})
-	}
 
 	response, err := r.GetUserActivity(username)
 	if err != nil {
@@ -214,15 +192,9 @@ func updateUserData(c *gin.Context) error {
 	}
 
 	r := data_store.NewUserDater()
-	if r == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"Error": INIT_USERDATA_FAIL})
-		return nil
-	}
 
 	req := c.Request.RequestURI
 	method := c.Request.Method
 	activity := fmt.Sprintf("%s %s", method, req)
-	err := r.AddActivity(username, activity)
-	return err
-
+	return r.AddActivity(username, activity)
 }

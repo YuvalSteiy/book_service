@@ -11,8 +11,9 @@ const SERVER_PORT = "3005"
 func main() {
 	server := gin.Default()
 	service.ConfigRoutes(server)
-	service.InitDataStore()
-	server.Run(fmt.Sprintf(":%s",SERVER_PORT))
+	err := service.InitDataStore()
+	if err != nil {
+		panic(err)
+	}
+	server.Run(fmt.Sprintf(":%s", SERVER_PORT))
 }
-
-

@@ -29,16 +29,10 @@ func (r *redisUserData) AddActivity(username string, req string) error {
 	var err error
 	if !checkExist {
 		err = r.createNewClientActivity(username, req)
-		if err != nil {
-			return err
-		}
 	} else {
 		err = r.updateClientActivity(username, req)
-		if err != nil {
-			return err
-		}
 	}
-	return nil
+	return err
 }
 
 func (r *redisUserData) createNewClientActivity(username string, req string) error {

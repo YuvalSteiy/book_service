@@ -39,7 +39,7 @@ func newElasticBookStore() *elasticBookStore {
 
 func (e *elasticBookStore) GetBookByID(id string) (*models.Book, error) {
 	ctx := context.Background()
-	response, err := (e.client).Get().Index(INDEX_NAME).Id(id).Do(ctx)
+	response, err := e.client.Get().Index(INDEX_NAME).Id(id).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (e *elasticBookStore) GetBookByID(id string) (*models.Book, error) {
 
 func (e *elasticBookStore) InsertBook(book models.Book) (string, error) {
 	ctx := context.Background()
-	response, err := (e.client).Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
+	response, err := e.client.Index().Index(INDEX_NAME).BodyJson(book).Do(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -65,22 +65,14 @@ func (e *elasticBookStore) InsertBook(book models.Book) (string, error) {
 
 func (e *elasticBookStore) UpdateBook(title string, id string) error {
 	ctx := context.Background()
-	_, err := (e.client).Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err := e.client.Update().Index(INDEX_NAME).Id(id).Doc(map[string]interface{}{"title": title}).Do(ctx)
+	return err
 }
 
 func (e *elasticBookStore) DeleteBook(id string) error {
 	ctx := context.Background()
-	_, err := (e.client).Delete().Index(INDEX_NAME).Id(id).Do(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err := e.client.Delete().Index(INDEX_NAME).Id(id).Do(ctx)
+	return err
 }
 
 func (e *elasticBookStore) SearchBook(title string, authorName string, priceRangeStr string) ([]models.Book, error) {
@@ -99,7 +91,7 @@ func (e *elasticBookStore) SearchBook(title string, authorName string, priceRang
 		}
 		query.Filter(elastic.NewRangeQuery("price").From(priceRange[0]).To(priceRange[1]))
 	}
-	searchResult, err := (e.client).Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
+	searchResult, err := e.client.Search().Index(INDEX_NAME).Query(query).Size(100).Do(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -118,14 +110,13 @@ func (e *elasticBookStore) SearchBook(title string, authorName string, priceRang
 
 func (e *elasticBookStore) GetStoreInfo() (int64, *float64, error) {
 	ctx := context.Background()
-	countService := elastic.NewCountService(e.client)
-	countResult, err := countService.Index(INDEX_NAME).Do(ctx)
+	countResult, err := elastic.NewCountService(e.client).Index(INDEX_NAME).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	agg := elastic.NewCardinalityAggregation().Field("author_name.keyword")
-	response, err := (e.client.Search()).Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
+	response, err := e.client.Search().Index(INDEX_NAME).Aggregation("diff_authors", agg).Do(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
