@@ -17,6 +17,7 @@ func GetBookByID(c *gin.Context) {
 	err := updateUserData(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"Error": "Failed To Update User Data"})
+		return
 	}
 
 	db := data_store.NewBookStorer()

@@ -26,3 +26,5 @@ func GetPriceRange(priceRangeStr string) ([]float64, error) {
 
 	return priceRange, nil
 }
+
+
